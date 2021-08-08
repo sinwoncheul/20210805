@@ -20,6 +20,69 @@ const { name } = require('ejs');
 // 아이디:암호@서버주소:포트번호/DB명
 const mongourl    = "mongodb://id319:pw319@1.234.5.158:37017/id319";
 
+// 회원탈퇴
+// [DELETE] http://127.0.0.1:3000/member/delete
+router.delete('/delete', checkToken, async function(req, res, next) {
+    try {
+        // 1. 인증후 전달되는 idx이메일 받기
+        const email = req.idx;
+
+        // 2. DB연결
+        const dbconn     = await mongoclient.connect(mongourl);
+        const collection = dbconn.db("id319").collection("member7");
+
+        // 3. DB에서 삭제 (수정)
+        const query = { _id : email};
+        const result = await collection.deleteOne(query);
+        console.log(result); //{    }
+
+        // 4. DB닫기
+        dbconn.close();
+
+        // 5. 결과반환
+        if(result.deletedCount === 1){
+            return res.send( {ret:1, data:'회원탈퇴 성공'} );
+        }
+        res.send( {ret:0, data:'회원탈퇴 실패'} );            
+    }
+    catch(error){
+        console.error(error);
+        res.send( {ret:-1, data:error} );
+    }
+});
+
+// 로그아웃
+// [POST] http://127.0.0.1:3000/member/logout
+router.post('/logout', checkToken, async function(req, res, next) {
+    try {
+        // 1. 인증 후 전달되는 값 받기
+        const email = req.idx;
+
+        // 2. DB연결
+        const dbconn     = await mongoclient.connect(mongourl);
+        const collection = dbconn.db("id319").collection("member7");
+
+        // 3. DB update를 통해 token 값 지우기
+        const query = { _id : email};
+        const changeData = { $set : { token : '' } };
+        const result = await collection.updateOne(query, changeData);
+        
+        // 4. DB닫기
+        dbconn.close();
+
+        // 5. 결과값 반환
+        if( result.matchedCount === 1 ) {
+            return res.send( {ret:1, data:'로그아웃 성공'} );
+        }
+        res.send( {ret:0, data:'로그아웃 실패'} );
+    }
+    catch(error){
+        console.error(error);
+        res.send( {ret:-1, data:error} );
+    }
+});
+
+
 // 비밀번호 변경( 변경할 암호 )
 // [PUT] http://127.0.0.1:3000/member/changepw
 router.put('/changepw', checkToken, async function(req, res, next) {

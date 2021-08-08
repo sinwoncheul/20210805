@@ -14,6 +14,8 @@ const auth = {
         // req.body   <= post, put, delete
         // req.query  <= get
         const token = req.headers.token;
+        // console.log('auth.js');
+        // console.log(req.body);
 
         if(!token) {
             return res.send({ret:-1, data:'token이 없습니다.'});
