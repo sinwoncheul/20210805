@@ -11,6 +11,11 @@ const mongourl    = "mongodb://id319:pw319@1.234.5.158:37017/id319";
 const multer      = require('multer');
 const upload      = multer({storage : multer.memoryStorage()});
 
+// 파일에서 이미지 읽어서 전송
+const fs = require('fs');
+const path = require('path');
+
+
 
 /*
 // 물품번호를 자동으로 증가시키는 시퀀스 생성
@@ -20,6 +25,42 @@ db.seq_item7.insert({
 });
 */
 
+// 서버이미지 추가하기
+// http://127.0.0.1:3000/api_seller/image1?code=물품코드
+router.post('/image1', upload.array("image"), async function(req, res, next) {
+    try {
+        // 1. 전달되는 값
+        const code = req.query.code;
+
+        // upload.single   => req.file    =>  {        }
+        // upload.array    => req.files   =>  [{ },{ },{ }]
+        var obj = [];
+        for(let i=0;i<req.files.length;i++) {
+            // 직접 구현... (code물품코드, 이미지명, 이미지타입, 이미지dt)
+            obj.push({
+                code:code,  
+                filename : req.files[i].originalname,
+                filetype : req.files[i].mimetype,
+                filedata : req.files[i].buffer,
+            });
+        }
+
+        // 2. db연결
+        const dbconn   = await mongoclient.connect(mongourl);
+        var collection = dbconn.db("id319").collection("itemimg7");
+
+        // 3. db에 추가  [{},{},{}]
+        const result = await collection.insertMany( obj );
+        if(result.insertedCount === req.files.length){
+            return res.send({ret:1, data:'이미지를 추가했습니다.'})
+        }
+        res.send({ret:0, data:'이미지를 추가실패.'})
+    }
+    catch(error){
+        console.error(error);
+        res.send({ret:-1, data:error});        
+    }
+});
 
 // 메인이미지 변경하기
 // http://127.0.0.1:3000/api_seller/imageupdate?code=물품코드
@@ -53,6 +94,60 @@ router.put('/imageupdate', upload.single("image"), async function(req, res, next
         else{
             res.send({ret:0, data:'이미지가 첨부되지 않았습니다.'});
         }
+    }
+    catch(error){
+        console.error(error);
+        res.send({ret:-1, data:error});        
+    }
+});
+
+// 서버이미지 표시
+// http://127.0.0.1:3000/api_seller/image2?code=90&idx=
+router.get('/image2', async function(req, res, next) {
+    try{
+        const idx = Number(req.query.idx);
+        
+        const dbconn   = await mongoclient.connect(mongourl);
+        var collection = dbconn.db("id319").collection("itemimg7");
+        // 3. 조회 조건
+        const query = { code :req.query.code };
+        const result = await collection.find(query,
+            {projection:{ filedata:1, filetype:1 }}).toArray();
+
+        if(typeof(result[idx] ) !== 'undefined' ){   
+            res.contentType(result[idx].filetype);
+            res.send(result[idx].filedata.buffer);
+        }
+        else { // DB에 이미지가 없을경우
+            const tmp = path.join(__dirname + './../image/default.jpg');
+            let data = fs.readFileSync(tmp);
+            res.contentType("image/jpeg");
+            res.send(data);
+        }
+    }
+    catch(error) {
+        console.error(error);
+        res.send({ret:-1, data:error});
+    }
+});
+
+// 물품1개 정보 전달
+// http://127.0.0.1:3000/api_seller/selectone?code=물품코드
+router.get('/selectone', async function(req, res, next) {
+    try {
+        // 1. 전달값 받기
+        const code = req.query.code;
+
+        // 2. DB연동
+        const dbconn   = await mongoclient.connect(mongourl);
+        var collection = dbconn.db("id319").collection("item7");
+
+        // 3. 조회
+        const query  = { _id : Number(code)};
+        const result = await collection.findOne(query);
+
+        // 4. 반환값 리턴
+        res.send({ret:1, data:result});
     }
     catch(error){
         console.error(error);
@@ -110,7 +205,7 @@ router.get('/select', async function(req, res, next) {
         // 10개 가져오기 find로 했기 때문에 마지막에 toArray()로 변환
         const rows  = await collection.find(query, 
             { projection : { filedata:0, filename:0, filetype:0 } })
-            .sort({name : 1})
+            .sort({_id : -1})
             .skip((page-1)*10)
             .limit(10)
             .toArray();
