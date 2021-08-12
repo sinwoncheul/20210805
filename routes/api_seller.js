@@ -1,6 +1,10 @@
 var express = require('express');
 var router = express.Router();
 
+// 토큰 체크
+const checkToken = require('../config/auth').checkToken;
+
+
 // mongodb연동 설정
 const mongoclient = require('mongodb').MongoClient;
 const ObjectId    = require('mongodb').ObjectId;
@@ -24,6 +28,94 @@ db.seq_item7.insert({
     seq : 1
 });
 */
+
+// 주문내역
+// http://127.0.0.1:3000/api_seller/orderlist
+// headers에 token을 포함해서 호출
+router.get('/orderlist', checkToken, async function(req,res,next){
+    try{
+        const email = req.idx;
+
+        const dbconn   = await mongoclient.connect(mongourl);
+        var collection = dbconn.db("id319").collection("order7");
+
+        //DB검색 조건
+        const query = {email : email};
+        var result = await collection.find(query).toArray();
+
+        // 주문내역을 반복
+        for(let i=0; i<result.length; i++) {
+            const query1 = { _id : Number(result[i].code)}
+            const collection1 = dbconn.db("id319").collection("item7");
+            const result1 = await collection1.findOne(query1);
+
+            const query2 = { _id :result[i].email}
+            const collection2 = dbconn.db("id319").collection("member7");
+            const result2 = await collection2.findOne(query2);
+
+            result[i]['item_name']  = result1.name;
+            result[i]['item_price'] = result1.price;
+
+            result[i]['item_phone'] = result2.phone;
+        }
+        res.send({ret :1 ,data : result});
+
+
+
+    }
+    catch(error){
+        console.error(error);
+        res.send({ret:-1, data:error});
+    }
+})
+
+// 주문 하기
+// http://127.0.0.1:3000/api_seller/orderaction
+router.put('/orderaction', checkToken, async function(req, res, next) {
+    try {
+        // 1. 전달값 받기
+        const idx = req.idx;        // 이메일 토큰 확인후 전달되는 ID값
+        const code = req.body.code; // 물품코드
+        const cnt = req.body.cnt;   // 주문수량
+
+        // 2. DB 연결
+        const dbconn   = await mongoclient.connect(mongourl);
+        var collection = dbconn.db("id319").collection("seq_order7");
+        
+        // 3. seq_order7 컬렉션(테이블)에서 현재번호가져오고, 1증가시킴 
+        const result = await collection.findOneAndUpdate(
+            {_id:'SEQ_ORDER7_NO'}, { $inc : {seq : 1} });
+        
+        const orderNo = result.value.seq; // 주문번호
+
+        // 4. 저장할 컬렉션 변경
+        collection = dbconn.db("id319").collection("order7");
+
+        // 5. 저장할 내용 object로 만들기
+        const obj  = {
+            _id     : orderNo,   // 주문번호
+            email   : idx,       // 주문자
+            code    : code,      // 물품코드
+            cnt     : cnt,       // 주문수량 
+            regdate : new Date() // 주문일자
+        }; 
+
+        // 6. DB 저장
+        const result1 = await collection.insertOne(obj);
+        dbconn.close();
+
+        // 7. 결과 반환
+        if(result1.insertedId === orderNo){
+            return res.send({ret:1, data:`주문번호 ${orderNo} 성공`});
+        }
+        res.send({ret:0, data:`주문실패`});
+    }
+    catch(error){
+        console.error(error);
+        res.send({ret:-1, data:error});
+    }
+});
+
 
 // 서버이미지 추가하기
 // http://127.0.0.1:3000/api_seller/image1?code=물품코드

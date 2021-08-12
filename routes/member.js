@@ -20,6 +20,17 @@ const { name } = require('ejs');
 // 아이디:암호@서버주소:포트번호/DB명
 const mongourl    = "mongodb://id319:pw319@1.234.5.158:37017/id319";
 
+//토큰의 유효성 여부 확인
+router.get('/validtoken', checkToken, async function(req, res, next) {
+    try {
+        res.send( { ret :1, data : '유효한 토큰입니다.'});
+    }
+    catch(error){
+        console.error(error);
+        res.send( {ret:-1, data:error} );
+    }
+})
+
 // 회원탈퇴
 // [DELETE] http://127.0.0.1:3000/member/delete
 router.delete('/delete', checkToken, async function(req, res, next) {
